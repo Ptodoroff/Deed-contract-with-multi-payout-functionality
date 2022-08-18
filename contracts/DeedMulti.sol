@@ -1,12 +1,12 @@
 pragma solidity 0.8.15;
 
-contract Deed {
+contract DeedMulti {
     address public lawyer;
     address  payable public beneficiary;
-    uint  public donation_date;
-    uint constant payouts =10;                           // I declare the number of payouts. I declare as constant to provide less strain on the code execution and save gas.
+    uint  public deploymentTime;
+    uint constant payouts =4;                           // I declare the number of payouts. I declare as constant to provide less strain on the code execution and save gas.
     uint  amount ;                                       //  Ideclare the amounts to be paid at every payout. 
-    uint constant interval = 5;                           //  I declare the interval between each payment. set at 10 seconds for testing purposes. 
+    uint constant interval = 1;                           //  I declare the interval between each payment. set at 1 second for testing purposes. 
     uint paidPayouts;                                   //  I declare it to track the number of completed payouts 
     
     
@@ -16,17 +16,26 @@ contract Deed {
         _;
     }
 
-    constructor ( address _address, address payable _beneficiary, uint date, uint _amount) payable   {      
+    constructor ( address _address, address payable _beneficiary, uint time) payable   {      
         lawyer= _address;
         beneficiary = _beneficiary;
-        donation_date = date +block.timestamp;
-        amount = msg.value/_amount;                       // every payout will be of equal amounts. this is why I define the amount in the constructor and  make it equal to the amount of ether sent upon deployment, divided by the payouts number 
-
+        deploymentTime = time +block.timestamp;
+        amount = msg.value/payouts;                       // every payout will be of equal amounts. this is why I define the amount in the constructor and  make it equal to the amount of ether sent upon deployment, divided by the payouts number 
+      
     }
 
-    function send_funds () external onlyLawyer {                                                            
-        require( block.timestamp >= donation_date, "Funds are still locked");
-        beneficiary.transfer(address(this).balance);
+    function withdraw () external  {
+        require (msg.sender ==beneficiary, " Only the beneficiary can invoke this fn ()! ");
+        require (paidPayouts<payouts, "Maximum number of  available payouts exceeded!");                   //check required for the beneficiary to not be able to exceed the maximum payouts                                         
+        require( block.timestamp >= deploymentTime, "Funds are still locked");                         
+        uint eligiblePayouts = (block.timestamp - deploymentTime)/interval ;                                //  I declare this variable in order to calculate how much  much payments the beneficiary is eligible for. the time difference between the fn invocation and the deployment time , divided by the payment interval
+        uint duePayouts = eligiblePayouts - paidPayouts;                                                     // I  also declare duepayouts, which is different form eligible payouts. The former is  derived from subtracting the already paid payouts from the eligible payouts.
+        duePayouts = duePayouts +paidPayouts >= payouts ? payouts-paidPayouts :duePayouts;                 // I use a ternary operator to check the duepayouts value and to prevent locking the funds forever in case the eligible payots exceed the payouts (4) due to forgeting to withdraw for a very long time. If duepayots and paidpayouts exceed 4, then duepayouts is equivelanet to 4- paidPayouts. Else, it is equal to itself.
+        paidPayouts +=duePayouts;                                                                           
+
+        beneficiary.transfer((duePayouts)*amount);
+        
+        
 
     }
  
